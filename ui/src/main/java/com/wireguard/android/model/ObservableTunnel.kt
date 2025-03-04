@@ -11,6 +11,8 @@ import com.wireguard.android.BR
 import com.wireguard.android.backend.Statistics
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.android.databinding.Keyed
+import com.wireguard.android.fragment.BaseFragment
+import com.wireguard.android.fragment.BaseFragment.Companion
 import com.wireguard.android.util.applicationScope
 import com.wireguard.config.Config
 import kotlinx.coroutines.Dispatchers
@@ -62,7 +64,10 @@ class ObservableTunnel internal constructor(
     }
 
     suspend fun setStateAsync(state: Tunnel.State): Tunnel.State = withContext(Dispatchers.Main.immediate) {
-        if (state != this@ObservableTunnel.state)
+        val stateChange = state != this@ObservableTunnel.state
+        Log.d(TAG, "setStateAsync$stateChange")
+
+        if (stateChange)
             manager.setTunnelState(this@ObservableTunnel, state)
         else
             this@ObservableTunnel.state

@@ -21,6 +21,7 @@ import com.wireguard.android.backend.Statistics
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.android.configStore.ConfigStore
 import com.wireguard.android.databinding.ObservableSortedKeyedArrayList
+import com.wireguard.android.model.ObservableTunnel.Companion
 import com.wireguard.android.util.ErrorMessages
 import com.wireguard.android.util.UserKnobs
 import com.wireguard.android.util.applicationScope
@@ -198,7 +199,10 @@ class TunnelManager(private val configStore: ConfigStore) : BaseObservable() {
         var newState = tunnel.state
         var throwable: Throwable? = null
         try {
-            newState = withContext(Dispatchers.IO) { getBackend().setState(tunnel, state, tunnel.getConfigAsync()) }
+            newState = withContext(Dispatchers.IO) {
+                Log.d(TAG, "setTunnelState")
+                getBackend().setState(tunnel, state, tunnel.getConfigAsync())
+            }
             if (newState == Tunnel.State.UP)
                 lastUsedTunnel = tunnel
         } catch (e: Throwable) {

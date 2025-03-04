@@ -91,6 +91,7 @@ abstract class BaseFragment : Fragment(), OnSelectedTunnelChangedListener {
         val activity = activity ?: return
         activity.lifecycleScope.launch {
             try {
+                Log.d(TAG, "setTunnelStateWithPermissionsResult")
                 tunnel.setStateAsync(Tunnel.State.of(checked))
             } catch (e: Throwable) {
                 val error = ErrorMessages[e]
