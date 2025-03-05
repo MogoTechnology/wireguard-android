@@ -125,28 +125,28 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string, scrambleStr st
 	}
 	device.DisableSomeRoamingForBrokenMobileSemantics()
 
-	var uapi net.Listener
-
-	uapiFile, err := ipc.UAPIOpen(name)
-	if err != nil {
-		logger.Errorf("UAPIOpen: %v", err)
-	} else {
-		uapi, err = ipc.UAPIListen(name, uapiFile)
-		if err != nil {
-			uapiFile.Close()
-			logger.Errorf("UAPIListen: %v", err)
-		} else {
-			go func() {
-				for {
-					conn, err := uapi.Accept()
-					if err != nil {
-						return
-					}
-					go device.IpcHandle(conn)
-				}
-			}()
-		}
-	}
+	//var uapi net.Listener
+	//
+	//uapiFile, err := ipc.UAPIOpen(name)
+	//if err != nil {
+	//	logger.Errorf("UAPIOpen: %v", err)
+	//} else {
+	//	uapi, err = ipc.UAPIListen(name, uapiFile)
+	//	if err != nil {
+	//		uapiFile.Close()
+	//		logger.Errorf("UAPIListen: %v", err)
+	//	} else {
+	//		go func() {
+	//			for {
+	//				conn, err := uapi.Accept()
+	//				if err != nil {
+	//					return
+	//				}
+	//				go device.IpcHandle(conn)
+	//			}
+	//		}()
+	//	}
+	//}
 
 	err = device.Up()
 	if err != nil {
