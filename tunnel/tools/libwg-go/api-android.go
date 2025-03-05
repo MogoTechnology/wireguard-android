@@ -98,7 +98,7 @@ func init() {
 }
 
 //export wgTurnOn
-func wgTurnOn(interfaceName string, tunFd int32, settings string, scrambleStr string) int32 {
+func wgTurnOn(interfaceName string, tunFd int32, settings string, scrambleStr string, callback uintptr) int32 {
 	tag := cstring("WireGuard/GoBackend/" + interfaceName)
 	logger := &device.Logger{
 		Verbosef: AndroidLogger{level: C.ANDROID_LOG_DEBUG, tag: tag}.Printf,
@@ -114,7 +114,7 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string, scrambleStr st
 
 	logger.Verbosef("Attaching to interface %v", name)
 
-	callbackFunc = unsafe.Pointer(nil)
+	callbackFunc = unsafe.Pointer(callback)
 	device := device.NewDevice(tun, conn.NewStdNetBind(), logger, scrambleStr, callbackAndroid)
 
 	err = device.IpcSet(settings)
