@@ -151,7 +151,7 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string, scrambleStr st
 	err = device.Up()
 	if err != nil {
 		logger.Errorf("Unable to bring up device: %v", err)
-		uapiFile.Close()
+		//uapiFile.Close()
 		device.Close()
 		return -1
 	}
@@ -165,11 +165,11 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string, scrambleStr st
 	}
 	if i == math.MaxInt32 {
 		logger.Errorf("Unable to find empty handle")
-		uapiFile.Close()
+		//uapiFile.Close()
 		device.Close()
 		return -1
 	}
-	tunnelHandles[i] = TunnelHandle{device: device, uapi: uapi}
+	tunnelHandles[i] = TunnelHandle{device: device, uapi: nil}
 	return i
 }
 
