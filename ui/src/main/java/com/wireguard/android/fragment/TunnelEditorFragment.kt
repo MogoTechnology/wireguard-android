@@ -4,6 +4,7 @@
  */
 package com.wireguard.android.fragment
 
+import WgRequestSubIP
 import android.content.Context
 import android.os.Bundle
 import android.text.InputType
@@ -30,10 +31,12 @@ import com.wireguard.android.databinding.TunnelEditorFragmentBinding
 import com.wireguard.android.model.ObservableTunnel
 import com.wireguard.android.util.AdminKnobs
 import com.wireguard.android.util.BiometricAuthenticator
+import com.wireguard.android.util.CommonConfig
 import com.wireguard.android.util.ErrorMessages
 import com.wireguard.android.viewmodel.ConfigProxy
 import com.wireguard.config.Config
 import kotlinx.coroutines.launch
+import java.util.function.Consumer
 
 /**
  * Fragment for editing a WireGuard configuration.
@@ -112,10 +115,48 @@ class TunnelEditorFragment : BaseFragment(), MenuProvider {
             selectedTunnel = tunnel
     }
 
+
+    /*
+*
+*  String publicKey = config.getInterface().getKeyPair().getPublicKey().toBase64();
+            Set<InetNetwork> inetNetworks = config.getInterface().getAddresses();
+            if (!inetNetworks.isEmpty()) {
+                InetNetwork firstNetwork = inetNetworks.iterator().next(); // 获取第一个元素
+                InetAddress firstIp = firstNetwork.getAddress(); // 获取 InetAddress
+                String ipString = firstIp.getHostAddress(); // 获取 IP 地址的字符串格式
+                Log.d(TAG, "第一个 IP 地址:: " + ipString);
+                Log.d(TAG, "第一个 publicKey:: " + publicKey);
+
+                //String childIp = wgRequestSubIP(ipString,publicKey,"5a02be82-7964-3c19-9a13-366564aeb959");
+                // TODO: 2025/3/4 lewis 这里的线程使用方式要调整一下，将结果抛到UI线程
+                new Thread(() -> {
+                    WgRequestSubIP wgRequest = new WgRequestSubIP();
+                    String result = wgRequest.requestSubIP(
+                            ipString,
+                            publicKey,
+                            "5a02be82-7964-3c19-9a13-366564aeb959"
+                    );
+
+                    if (result != null) {
+                        // 处理成功获取到的 IP
+                        Log.d("WireGuard", "获取到子网 IP: " + result);
+                        Log.d(TAG, "第一个 childIp 地址:: " + result);
+                        currentTunnelHandle = wgTurnOn(tunnel.getName(), tun.detachFd(), goConfig,"obfuscate mogo2022",callback);
+
+                    } else {
+                        // 处理失败情况
+                        Log.e("WireGuard", "获取子网 IP 失败");
+                    }
+                }).start();
+
+            }
+*
+* */
+
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
         if (menuItem.itemId == R.id.menu_action_save) {
             binding ?: return false
-            val newConfig = try {
+            var newConfig = try {
                 binding!!.config!!.resolve()
             } catch (e: Throwable) {
                 val error = ErrorMessages[e]
@@ -126,39 +167,85 @@ class TunnelEditorFragment : BaseFragment(), MenuProvider {
                 return false
             }
             val activity = requireActivity()
-            activity.lifecycleScope.launch {
-                when {
-                    tunnel == null -> {
-                        Log.d(TAG, "Attempting to create new tunnel " + binding!!.name)
-                        val manager = Application.getTunnelManager()
-                        try {
-                            onTunnelCreated(manager.create(binding!!.name!!, newConfig), null)
-                        } catch (e: Throwable) {
-                            onTunnelCreated(null, e)
+
+
+            val publicKey = newConfig.`interface`.keyPair.publicKey.toBase64()
+
+
+            // val ipString = newConfig.`interface`.addresses.firstOrNull()?.address?.hostAddress ?: ""
+
+            WgRequestSubIP.requestSubIP(
+                ip = CommonConfig.ip,
+                publicKey = publicKey,
+                uuid = CommonConfig.uuid,
+                callback = object : WgRequestSubIP.RequestCallback {
+                    override fun onSuccess(allowedIP: String) {
+                        Log.d("WireGuard", "成功获取子网IP: $allowedIP")
+
+                        binding!!.config?.let {
+
+
+                            it.`interface`.addresses = allowedIP
+                            it.peers.clear()
+                            val peerItem = it.addPeer()
+
+                            peerItem.endpoint = "${CommonConfig.ip}:443"
+                            peerItem.publicKey = CommonConfig.webPublicKey
+                            peerItem.allowedIps = "0.0.0.0/0"
+                            var newConfig = try {
+                                binding!!.config!!.resolve()
+                            } catch (e: Throwable) {
+                                val error = ErrorMessages[e]
+                                val tunnelName = if (tunnel == null) binding!!.name else tunnel!!.name
+                                val message = getString(R.string.config_save_error, tunnelName, error)
+                                Log.e(TAG, message, e)
+                                Snackbar.make(binding!!.mainContainer, error, Snackbar.LENGTH_LONG).show()
+                                return
+                            }
+
+                            activity.lifecycleScope.launch {
+                                when {
+                                    tunnel == null -> {
+                                        Log.d(TAG, "Attempting to create new tunnel " + binding!!.name)
+                                        val manager = Application.getTunnelManager()
+                                        try {
+                                            onTunnelCreated(manager.create(binding!!.name!!, newConfig), null)
+                                        } catch (e: Throwable) {
+                                            onTunnelCreated(null, e)
+                                        }
+                                    }
+
+                                    tunnel!!.name != binding!!.name -> {
+                                        Log.d(TAG, "Attempting to rename tunnel to " + binding!!.name)
+                                        try {
+                                            tunnel!!.setNameAsync(binding!!.name!!)
+                                            onTunnelRenamed(tunnel!!, newConfig, null)
+                                        } catch (e: Throwable) {
+                                            onTunnelRenamed(tunnel!!, newConfig, e)
+                                        }
+                                    }
+
+                                    else -> {
+                                        Log.d(TAG, "Attempting to save config of " + tunnel!!.name)
+                                        try {
+
+                                            tunnel!!.setConfigAsync(newConfig)
+                                            onConfigSaved(tunnel!!, null)
+                                        } catch (e: Throwable) {
+                                            onConfigSaved(tunnel!!, e)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    tunnel!!.name != binding!!.name -> {
-                        Log.d(TAG, "Attempting to rename tunnel to " + binding!!.name)
-                        try {
-                            tunnel!!.setNameAsync(binding!!.name!!)
-                            onTunnelRenamed(tunnel!!, newConfig, null)
-                        } catch (e: Throwable) {
-                            onTunnelRenamed(tunnel!!, newConfig, e)
-                        }
-                    }
-
-                    else -> {
-                        Log.d(TAG, "Attempting to save config of " + tunnel!!.name)
-                        try {
-                            tunnel!!.setConfigAsync(newConfig)
-                            onConfigSaved(tunnel!!, null)
-                        } catch (e: Throwable) {
-                            onConfigSaved(tunnel!!, e)
-                        }
+                    override fun onError(error: String) {
+                        Log.e("WireGuard", "获取子网IP失败: $error")
                     }
                 }
-            }
+            )
+
             return true
         }
         return false

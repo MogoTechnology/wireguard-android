@@ -79,7 +79,8 @@ public final class GoBackend implements Backend {
 
     private static native void wgTurnOff(int handle);
 
-    private static native int wgTurnOn(String ifName, int tunFd, String settings,String scramble, StatusCallback callback);
+    // private static native int wgTurnOn(String ifName, int tunFd, String settings,String scramble, StatusCallback callback);
+     private static native int wgTurnOn(String ifName, int tunFd, String settings,String scramble, StatusCallback callback);
 
     private static native String wgVersion();
 
@@ -204,7 +205,7 @@ public final class GoBackend implements Backend {
     public State setState(final Tunnel tunnel, State state, @Nullable final Config config) throws Exception {
         final State originalState = getState(tunnel);
 
-        Log.d(TAG,"setState");
+        Log.d(TAG,"setState" + state.name());
         if (state == State.TOGGLE)
             state = originalState == State.UP ? State.DOWN : State.UP;
         if (state == originalState && tunnel == currentTunnel && config == currentConfig)
@@ -326,33 +327,25 @@ public final class GoBackend implements Backend {
                 if (tun == null)
                     throw new BackendException(Reason.TUN_CREATION_ERROR);
                 Log.d(TAG, "Go backend " + wgVersion());
-                StatusCallback callback = new StatusCallback() {
-                    @Override
-                    public void onStatusChanged(int status, String message) {
-                        if (status == 1) {
-                            // 连接成功
-                            Log.d(TAG, "Connected: " + message);
-                        } else {
-                            // 处理错误
-                            Log.e(TAG, "Error: " + message);
+                final StatusCallback callback = (status, message) -> {
+                    Log.d(TAG, "StatusCallback: " + status);
+
+                    if (status == 1) {
+                        // 连接成功
+                        Log.d(TAG, "Connected: " + message);
+                        //} else if (status == 2 || status == 4){
+                    }else{
+                        // 处理错误
+                        Log.e(TAG, "Error: " + message);
+                        try {
+                            closeRetryConnect();
+                        }catch (Exception e){
+                            Log.e(TAG, "Error: " + e.getMessage());
                         }
+
                     }
                 };
-                String publicKey = config.getInterface().getKeyPair().getPublicKey().toBase64();
-                Set<InetNetwork> inetNetworks = config.getInterface().getAddresses();
-                if (!inetNetworks.isEmpty()) {
-                    InetNetwork firstNetwork = inetNetworks.iterator().next(); // 获取第一个元素
-                    InetAddress firstIp = firstNetwork.getAddress(); // 获取 InetAddress
-                    String ipString = firstIp.getHostAddress(); // 获取 IP 地址的字符串格式
-                    Log.d(TAG, "第一个 IP 地址:: " + ipString);
-                    Log.d(TAG, "第一个 publicKey:: " + publicKey);
-
-                    String childIp = wgRequestSubIP(ipString,publicKey,"5a02be82-7964-3c19-9a13-366564aeb959");
-                    Log.d(TAG, "第一个 childIp 地址:: " + childIp);
-
-                }
-                // TODO: 2025/3/3 lewis test 参数替换为 scramble
-                currentTunnelHandle = wgTurnOn(tunnel.getName(), tun.detachFd(), goConfig,"test",callback);
+                currentTunnelHandle = wgTurnOn(tunnel.getName(), tun.detachFd(), goConfig,"obfuscate mogo2022",callback);
             }
             if (currentTunnelHandle < 0)
                 throw new BackendException(Reason.GO_ACTIVATION_ERROR_CODE, currentTunnelHandle);
@@ -363,21 +356,26 @@ public final class GoBackend implements Backend {
             service.protect(wgGetSocketV4(currentTunnelHandle));
             service.protect(wgGetSocketV6(currentTunnelHandle));
         } else {
-            if (currentTunnelHandle == -1) {
-                Log.w(TAG, "Tunnel already down");
-                return;
-            }
-            int handleToClose = currentTunnelHandle;
-            currentTunnel = null;
-            currentTunnelHandle = -1;
-            currentConfig = null;
-            wgTurnOff(handleToClose);
-            try {
-                vpnService.get(0, TimeUnit.NANOSECONDS).stopSelf();
-            } catch (final TimeoutException ignored) { }
+            if (closeRetryConnect()) return;
         }
 
         tunnel.onStateChange(state);
+    }
+
+    private boolean closeRetryConnect() throws ExecutionException, InterruptedException {
+        if (currentTunnelHandle == -1) {
+            Log.w(TAG, "Tunnel already down");
+            return true;
+        }
+        int handleToClose = currentTunnelHandle;
+        currentTunnel = null;
+        currentTunnelHandle = -1;
+        currentConfig = null;
+        wgTurnOff(handleToClose);
+        try {
+            vpnService.get(0, TimeUnit.NANOSECONDS).stopSelf();
+        } catch (final TimeoutException ignored) { }
+        return false;
     }
 
     /**

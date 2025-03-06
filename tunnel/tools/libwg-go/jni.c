@@ -53,14 +53,20 @@ JNIEXPORT jstring JNICALL Java_com_wireguard_android_backend_GoBackend_wgRequest
     LOGD("开始请求子网 IP");
 
     const char *ip_str = (*env)->GetStringUTFChars(env, ip, 0);
+    size_t ip_len = (*env)->GetStringUTFLength(env, ip);
+
     const char *publicKey_str = (*env)->GetStringUTFChars(env, publicKey, 0);
+    size_t publicKey_len = (*env)->GetStringUTFLength(env, publicKey);
+
     const char *uuid_str = (*env)->GetStringUTFChars(env, uuid, 0);
+    size_t uuid_len = (*env)->GetStringUTFLength(env, uuid);
+
     LOGD("参数: ip=%s, publicKey=%s, uuid=%s", ip_str, publicKey_str, uuid_str);
 
     char* result = wgRequestSubIP(
-            (struct go_string){.str = ip_str, .n = strlen(ip_str)},
-            (struct go_string){.str = publicKey_str, .n = strlen(publicKey_str)},
-            (struct go_string){.str = uuid_str, .n = strlen(uuid_str)}
+            (struct go_string){.str = ip_str, .n = ip_len},
+            (struct go_string){.str = publicKey_str, .n = publicKey_len},
+            (struct go_string){.str = uuid_str, .n = uuid_len}
     );
 
     (*env)->ReleaseStringUTFChars(env, ip, ip_str);
@@ -68,7 +74,6 @@ JNIEXPORT jstring JNICALL Java_com_wireguard_android_backend_GoBackend_wgRequest
     (*env)->ReleaseStringUTFChars(env, uuid, uuid_str);
 
     if (!result){
-        __android_log_print(ANDROID_LOG_ERROR, "MOGO/JNI", "请求子网 IP 失败");
         LOGD("请求子网 IP 失败");
 
         return NULL;
